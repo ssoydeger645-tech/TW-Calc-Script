@@ -6,4 +6,5 @@ export enum WestCalcWindowTab {
     DuelCalc = 'duel-calc',
     Tombola = 'tombola',
     Character = 'character',
+    JobEfficiency = 'job-efficiency',
 }

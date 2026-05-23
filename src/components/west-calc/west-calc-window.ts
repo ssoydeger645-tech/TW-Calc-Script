@@ -1,3 +1,5 @@
+
+import { JobEfficiencyView } from '../job-efficiency/job-efficiency.view';
 import { BattleCalcView } from '../battle-calc/battle-calc-view';
 import { CharacterView } from '../battle-calc/character-view';
 import { DuelCalcView } from '../duel-calc/duel-calc-view';
@@ -27,6 +29,7 @@ export class WestCalcWindow extends TW2Window<WestCalcWindowTab> {
         duelCalcView: DuelCalcView,
         tombolaViewFactory: TombolaViewFactory,
         settingsView: SettingsView,
+    jobEfficiencyView: JobEfficiencyView,
     ) {
         // renamed from "TWCalc_window"
         super('TWCalcWindow', errorTracker, window, language, logger, { title: 'The-West Calc' });
@@ -38,6 +41,7 @@ export class WestCalcWindow extends TW2Window<WestCalcWindowTab> {
         this.addView(duelCalcView);
         this.addView(tombolaViewFactory.getWindowView());
         this.addView(settingsView);
+        this.addView(jobEfficiencyView);
     }
 
     open(options?: Partial<TW2WindowOpenOptions<WestCalcWindowTab>>): void {

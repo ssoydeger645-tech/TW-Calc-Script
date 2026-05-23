@@ -1,3 +1,4 @@
+import { JobEfficiencyView } from '../job-efficiency/job-efficiency.view';
 import { BattleCalcView } from '../battle-calc/battle-calc-view';
 import { CharacterView } from '../battle-calc/character-view';
 import { DuelCalcView } from '../duel-calc/duel-calc-view';
@@ -28,6 +29,7 @@ export class WestCalc {
         duelCalcView: DuelCalcView,
         tombolaViewFactory: TombolaViewFactory,
         settingsView: SettingsView,
+        jobEfficiencyView: JobEfficiencyView,
     ) {
         this.window = new WestCalcWindow(
             window,
@@ -41,6 +43,7 @@ export class WestCalc {
             duelCalcView,
             tombolaViewFactory,
             settingsView,
+            jobEfficiencyView,
         );
     }
 }

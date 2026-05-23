@@ -1,3 +1,5 @@
+import { JobEfficiencyService } from './components/job-efficiency/job-efficiency.service';
+import { JobEfficiencyView } from './components/job-efficiency/job-efficiency.view';
 import { AlarmClock } from './components/notepad/alarm-clock';
 import { BattleCalc } from './components/battle-calc/battle-calc';
 import { Birthday } from './components/birthday/birthday';
@@ -42,6 +44,8 @@ export class Initializer {
         public readonly chests: Chests,
         public readonly quests: Quests,
         public readonly craft: Craft,
+        public readonly jobEfficiencyService: JobEfficiencyService,
+        public readonly jobEfficiencyView: JobEfficiencyView,
         @inject('window') public readonly window: TheWestWindow,
         @inject('tw2patch') public readonly patch: typeof tw2patch,
     ) {
