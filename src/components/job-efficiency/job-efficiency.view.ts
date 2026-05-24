@@ -1,7 +1,7 @@
-import { WestCalcWindowTab } from '../west-calc/west-calc-window.types';
 import { injectable, inject } from 'tsyringe';
 import { JobEfficiencyService } from './job-efficiency.service';
 import { ErrorTracker } from '../error-tracker/error-tracker';
+import { WestCalcWindowTab } from '../west-calc/west-calc-window.types';
 
 @injectable()
 export class JobEfficiencyView {
@@ -20,27 +20,28 @@ export class JobEfficiencyView {
         const { west, $ } = this.window;
         const container = $('<div style="padding: 10px;"></div>');
 
-        // Başlık
         container.append(
             $('<h3 style="margin-bottom: 10px;">Çalışma Verimliliği Hesaplayıcı</h3>')
         );
 
-        // Süre seçici
         const durationLabel = $('<span style="margin-right: 8px;">Çalışma süresi: </span>');
         const durationSelect = new west.gui.Combobox('TWCalc_JobEff_Duration')
             .addItem(15, '15 saniye')
-.addItem(600, '10 dakika')
-.addItem(3600, '1 saat')
+            .addItem(600, '10 dakika')
+            .addItem(3600, '1 saat')
+            .setWidth(150);
 
-        // Hesapla butonu
+        const resultsDiv = $('<div id="TWCalc_JobEff_Results"></div>');
+
         const calcBtn = new west.gui.Button()
             .setCaption('Hesapla')
             .click(() => {
-                this.errorTracker.execute(() => {
-                    this.showResults(
-                        Number(durationSelect.getValue()),
-                        resultsDiv
+                this.errorTracker.execute(async () => {
+                    resultsDiv.html('<div style="text-align:center; padding: 20px;">Yükleniyor...</div>');
+                    const results = await this.jobEfficiencyService.getBestJobs(
+                        Number(durationSelect.getValue())
                     );
+                    this.showResults(results, resultsDiv);
                 });
             });
 
@@ -50,25 +51,19 @@ export class JobEfficiencyView {
         controlsDiv.append($('<span style="margin: 0 8px;"></span>'));
         controlsDiv.append(calcBtn.getMainDiv());
 
-        // Sonuçlar alanı
-        const resultsDiv = $('<div id="TWCalc_JobEff_Results"></div>');
-
         container.append(controlsDiv);
         container.append(resultsDiv);
 
         return container;
     }
 
-    showResults(duration: number, resultsDiv: any) {
+    showResults(results: any[], resultsDiv: any) {
         const { $ } = this.window;
-        const results = this.jobEfficiencyService.getBestJobs(duration);
+
+        const scrollpane = new this.window.west.gui.Scrollpane();
 
         const table = $(`
-            <table style="
-                width: 100%;
-                border-collapse: collapse;
-                font-size: 13px;
-            ">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                 <thead>
                     <tr style="background: rgba(0,0,0,0.3); font-weight: bold;">
                         <td style="padding: 6px;">#</td>
@@ -97,6 +92,7 @@ export class JobEfficiencyView {
             $('tbody', table).append(row);
         });
 
-        resultsDiv.empty().append(table);
+        scrollpane.appendContent(table);
+        resultsDiv.empty().append($(scrollpane.getMainDiv()).css({ height: '250px' }));
     }
 }
