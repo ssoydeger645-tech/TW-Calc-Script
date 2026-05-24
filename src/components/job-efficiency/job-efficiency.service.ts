@@ -49,7 +49,6 @@ export class JobEfficiencyService {
         const jobs = JobList.getSortedJobs('id');
         const results: JobEfficiency[] = [];
 
-        // Minimap verisi al
         const minimap = await new Promise<any>((resolve) => {
             this.window.Ajax.get('map', 'get_minimap', {}, (data: any) => {
                 resolve(data);
@@ -57,10 +56,12 @@ export class JobEfficiencyService {
         });
 
         for (const job of jobs) {
+            // Seviye kontrolü
+            if (job.level > Character.level) continue;
+
             const group = minimap.job_groups[job.groupid];
             if (!group || !group.length) continue;
 
-            // En yakın konumu bul
             const nearest = group.sort((a: number[], b: number[]) =>
                 Math.abs(a[0] - pos.x) + Math.abs(a[1] - pos.y) -
                 (Math.abs(b[0] - pos.x) + Math.abs(b[1] - pos.y))
