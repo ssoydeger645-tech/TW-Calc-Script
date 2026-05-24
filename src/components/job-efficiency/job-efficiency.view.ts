@@ -28,11 +28,9 @@ export class JobEfficiencyView {
         // Süre seçici
         const durationLabel = $('<span style="margin-right: 8px;">Çalışma süresi: </span>');
         const durationSelect = new west.gui.Combobox('TWCalc_JobEff_Duration')
-            .addItem(900, '15 dakika')
-            .addItem(3600, '1 saat')
-            .addItem(7200, '2 saat')
-            .addItem(14400, '4 saat')
-            .setWidth(150);
+            .addItem(15, '15 saniye')
+.addItem(600, '10 dakika')
+.addItem(3600, '1 saat')
 
         // Hesapla butonu
         const calcBtn = new west.gui.Button()

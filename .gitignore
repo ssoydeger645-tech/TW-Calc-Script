@@ -2,7 +2,7 @@
 .idea/
 
 # dist
-dist
+# dist
 test/support/dist
 dist/original/TW-Calc.user.js
 
