@@ -2,6 +2,7 @@ import { injectable, inject } from 'tsyringe';
 import { JobEfficiencyService } from './job-efficiency.service';
 import { ErrorTracker } from '../error-tracker/error-tracker';
 import { WestCalcWindowTab } from '../west-calc/west-calc-window.types';
+import { JobEfficiency } from './job-efficiency.types';
 
 @injectable()
 export class JobEfficiencyView {
@@ -21,10 +22,10 @@ export class JobEfficiencyView {
         const container = $('<div style="padding: 10px;"></div>');
 
         container.append(
-            $('<h3 style="margin-bottom: 10px;">Çalışma Verimliliği Hesaplayıcı</h3>')
+            $('<h3 style="margin-bottom: 10px; color: #FFD700;">Çalışma Verimliliği Hesaplayıcı</h3>')
         );
 
-        const durationLabel = $('<span style="margin-right: 8px;">Çalışma süresi: </span>');
+        const durationLabel = $('<span style="margin-right: 8px; color: #fff;">Çalışma süresi: </span>');
         const durationSelect = new west.gui.Combobox('TWCalc_JobEff_Duration')
             .addItem(15, '15 saniye')
             .addItem(600, '10 dakika')
@@ -37,7 +38,7 @@ export class JobEfficiencyView {
             .setCaption('Hesapla')
             .click(() => {
                 this.errorTracker.execute(async () => {
-                    resultsDiv.html('<div style="text-align:center; padding: 20px;">Yükleniyor...</div>');
+                    resultsDiv.html('<div style="text-align:center; padding: 20px; color: #fff;">Yükleniyor... (bu biraz sürebilir)</div>');
                     const results = await this.jobEfficiencyService.getBestJobs(
                         Number(durationSelect.getValue())
                     );
@@ -57,7 +58,7 @@ export class JobEfficiencyView {
         return container;
     }
 
-    showResults(results: any[], resultsDiv: any) {
+    showResults(results: JobEfficiency[], resultsDiv: any) {
         const { $ } = this.window;
 
         const scrollpane = new this.window.west.gui.Scrollpane();
@@ -65,7 +66,7 @@ export class JobEfficiencyView {
         const table = $(`
             <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                 <thead>
-                    <tr style="background: rgba(0,0,0,0.3); font-weight: bold;">
+                    <tr style="background: rgba(0,0,0,0.5); font-weight: bold; color: #FFD700;">
                         <td style="padding: 6px;">#</td>
                         <td style="padding: 6px;">Çalışma Adı</td>
                         <td style="padding: 6px;">XP/Saat</td>
@@ -79,20 +80,21 @@ export class JobEfficiencyView {
         `);
 
         results.forEach((r, index) => {
+            const bg = index % 2 === 0 ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.1)';
             const row = $(`
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
-                    <td style="padding: 6px;">${index + 1}</td>
-                    <td style="padding: 6px;">${r.jobName}</td>
-                    <td style="padding: 6px; color: #90EE90;">${r.xpPerHour}</td>
-                    <td style="padding: 6px; color: #FFD700;">$${r.moneyPerHour}</td>
-                    <td style="padding: 6px; color: #FF6B6B;">${r.energyPerHour}</td>
-                    <td style="padding: 6px; font-weight: bold;">${r.efficiencyScore}</td>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); background: ${bg};">
+                    <td style="padding: 6px; color: #fff;">${index + 1}</td>
+                    <td style="padding: 6px; color: #fff;">${r.jobName}</td>
+                    <td style="padding: 6px; color: #00FF7F; font-weight: bold;">${r.xpPerHour}</td>
+                    <td style="padding: 6px; color: #FFD700; font-weight: bold;">$${r.moneyPerHour}</td>
+                    <td style="padding: 6px; color: #FF6B6B; font-weight: bold;">${r.energyPerHour}</td>
+                    <td style="padding: 6px; color: #00BFFF; font-weight: bold;">${r.efficiencyScore}</td>
                 </tr>
             `);
             $('tbody', table).append(row);
         });
 
         scrollpane.appendContent(table);
-        resultsDiv.empty().append($(scrollpane.getMainDiv()).css({ height: '250px' }));
+        resultsDiv.empty().append($(scrollpane.getMainDiv()).css({ height: '280px' }));
     }
 }
