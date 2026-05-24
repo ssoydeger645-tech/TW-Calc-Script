@@ -11,8 +11,8 @@ export class JobEfficiencyService {
 
     // Tek çalışma için verim hesapla
     calculate(job: any, duration: number): JobEfficiency {
-        const xpPerHour = Math.round(job.x_reward * (3600 / duration));
-        const moneyPerHour = Math.round(job.y_reward * (3600 / duration));
+        const xpPerHour = Math.round(job.experience * (3600 / duration));
+const moneyPerHour = Math.round(job.value * (3600 / duration));
         const energyPerHour = Math.round(job.malus * (3600 / duration));
         const efficiencyScore = energyPerHour > 0 
             ? Math.round(xpPerHour / energyPerHour) 
