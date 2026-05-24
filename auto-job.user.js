@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TW Auto Job
-// @version      1.1.0
-// @description  Otomatik iş yapma - sürüklenebilir panel
+// @version      1.2.0
+// @description  Otomatik iş yapma - 4 çalışma seçimi, saniye bazlı dinlenme
 // @author       ssoydeger645-tech
 // @include      https://*.the-west.*/game.php*
 // @include      https://*.the-west.com.*/game.php*
@@ -10,20 +10,21 @@
 // @grant        none
 // ==/UserScript==
 
-(function () {
+(function() {
     'use strict';
 
     const CONFIG = {
         minHealth: 30,
-        restTime: 5 * 60 * 1000,
+        restTime: 30,
         jobDuration: 3600,
         hotelSleepHours: 8,
         enabled: false,
-        selectedJobId: null,
+        selectedJobs: [null, null, null, null],
     };
 
     let isWorking = false;
     let isSleeping = false;
+    let currentJobIndex = 0;
 
     const waitForGame = setInterval(() => {
         if (typeof window.west === 'undefined' || typeof window.Character === 'undefined') return;
@@ -44,30 +45,30 @@
         isSleeping = true;
         updateStatus('Can düşük! Otele gidiliyor...');
         const town = window.Character.homeTown;
-        if (!town) {
-            isSleeping = false;
-            return;
-        }
-        window.Ajax.remoteCallMode(
-            'hotel',
-            'sleep',
-            {
-                town_id: town.town_id,
-                time: CONFIG.hotelSleepHours,
-            },
-            data => {
-                if (data.error) {
+        if (!town) { isSleeping = false; return; }
+        window.Ajax.remoteCallMode('hotel', 'sleep', {
+            town_id: town.town_id,
+            time: CONFIG.hotelSleepHours
+        }, (data) => {
+            if (data.error) {
+                isSleeping = false;
+                updateStatus('Otel hatası: ' + data.msg);
+            } else {
+                updateStatus('Uyuyor... (' + CONFIG.hotelSleepHours + ' saat)');
+                setTimeout(() => {
                     isSleeping = false;
-                    updateStatus('Otel hatası: ' + data.msg);
-                } else {
-                    updateStatus('Uyuyor... (' + CONFIG.hotelSleepHours + ' saat)');
-                    setTimeout(() => {
-                        isSleeping = false;
-                        if (CONFIG.enabled) startJob();
-                    }, CONFIG.hotelSleepHours * 3600 * 1000);
-                }
-            },
-        );
+                    if (CONFIG.enabled) startJob();
+                }, CONFIG.hotelSleepHours * 3600 * 1000);
+            }
+        });
+    }
+
+    function getNextJobId() {
+        const jobs = CONFIG.selectedJobs.filter(j => j !== null);
+        if (!jobs.length) return null;
+        const jobId = jobs[currentJobIndex % jobs.length];
+        currentJobIndex++;
+        return jobId;
     }
 
     function startJob() {
@@ -78,18 +79,16 @@
             return;
         }
 
-        if (!CONFIG.selectedJobId) {
-            updateStatus('Lütfen bir çalışma seçin!');
+        const jobId = getNextJobId();
+        if (!jobId) {
+            updateStatus('Lütfen en az bir çalışma seçin!');
             return;
         }
 
-        const job = window.JobList.getJobById(CONFIG.selectedJobId);
-        if (!job) {
-            updateStatus('Çalışma bulunamadı!');
-            return;
-        }
+        const job = window.JobList.getJobById(jobId);
+        if (!job) { updateStatus('Çalışma bulunamadı!'); return; }
 
-        window.Ajax.get('map', 'get_minimap', {}, minimap => {
+        window.Ajax.get('map', 'get_minimap', {}, (minimap) => {
             const pos = window.Character.position;
             const group = minimap.job_groups[job.groupid];
             if (!group || !group.length) {
@@ -97,14 +96,10 @@
                 return;
             }
 
-            const nearest = group
-                .slice()
-                .sort(
-                    (a, b) =>
-                        Math.abs(a[0] - pos.x) +
-                        Math.abs(a[1] - pos.y) -
-                        (Math.abs(b[0] - pos.x) + Math.abs(b[1] - pos.y)),
-                )[0];
+            const nearest = group.slice().sort((a, b) =>
+                Math.abs(a[0] - pos.x) + Math.abs(a[1] - pos.y) -
+                (Math.abs(b[0] - pos.x) + Math.abs(b[1] - pos.y))
+            )[0];
 
             isWorking = true;
             updateStatus('Çalışılıyor: ' + job.name);
@@ -114,22 +109,45 @@
 
             setTimeout(() => {
                 isWorking = false;
-                updateStatus('Dinleniyor... (' + CONFIG.restTime / 60000 + ' dk)');
+                updateStatus('Dinleniyor... (' + CONFIG.restTime + ' sn)');
                 setTimeout(() => {
                     if (CONFIG.enabled) startJob();
-                }, CONFIG.restTime);
-            }, (CONFIG.jobDuration + 30) * 1000);
+                }, CONFIG.restTime * 1000);
+            }, (CONFIG.jobDuration + 10) * 1000);
         });
     }
 
     function createUI() {
+        const jobs = window.JobList.getSortedJobs('id')
+            .filter(j => j.level <= window.Character.level);
+
+        let jobOptions = '<option value="">-- Seç --</option>';
+        jobs.forEach(j => {
+            jobOptions += `<option value="${j.id}">${j.name} (Sv.${j.level})</option>`;
+        });
+
+        const jobSelects = [0,1,2,3].map(i => `
+            <div style="margin-bottom: 4px;">
+                <label style="color: #ccc;">Çalışma ${i+1}:</label>
+                <select id="aj-job-${i}" style="
+                    width: 100%;
+                    background: #2a1400;
+                    color: #FFD700;
+                    border: 1px solid #8B6914;
+                    padding: 2px;
+                    font-size: 11px;
+                    margin-top: 2px;
+                ">${jobOptions}</select>
+            </div>
+        `).join('');
+
         const panel = document.createElement('div');
         panel.id = 'tw-auto-job-panel';
         panel.style.cssText = `
             position: fixed;
             bottom: 120px;
             right: 10px;
-            width: 240px;
+            width: 250px;
             background: rgba(50, 25, 0, 0.95);
             border: 2px solid #8B6914;
             border-radius: 8px;
@@ -139,14 +157,6 @@
             font-size: 12px;
             user-select: none;
         `;
-
-        // Çalışma listesi oluştur
-        const jobs = window.JobList.getSortedJobs('id').filter(j => j.level <= window.Character.level);
-
-        let jobOptions = '<option value="">-- Çalışma Seç --</option>';
-        jobs.forEach(j => {
-            jobOptions += `<option value="${j.id}">${j.name} (Sv.${j.level})</option>`;
-        });
 
         panel.innerHTML = `
             <div id="aj-header" style="
@@ -161,19 +171,9 @@
             ">🤠 TW Auto Job</div>
 
             <div style="padding: 10px;">
-                <div style="margin-bottom: 6px;">
-                    <label style="color: #ccc; display: block; margin-bottom: 3px;">Çalışma:</label>
-                    <select id="aj-job-select" style="
-                        width: 100%;
-                        background: #2a1400;
-                        color: #FFD700;
-                        border: 1px solid #8B6914;
-                        padding: 3px;
-                        font-size: 11px;
-                    ">${jobOptions}</select>
-                </div>
+                ${jobSelects}
 
-                <div style="margin-bottom: 6px;">
+                <div style="margin-bottom: 6px; margin-top: 8px;">
                     <label style="color: #ccc;">Süre:</label>
                     <select id="aj-duration" style="margin-left: 5px; background: #2a1400; color: #FFD700; border: 1px solid #8B6914; padding: 2px;">
                         <option value="15">15 saniye</option>
@@ -189,9 +189,9 @@
                 </div>
 
                 <div style="margin-bottom: 6px;">
-                    <label style="color: #ccc;">Dinlenme (dk):</label>
-                    <input id="aj-rest-time" type="number" value="5" min="1" max="60"
-                        style="width: 50px; margin-left: 5px; background: #2a1400; color: #FFD700; border: 1px solid #8B6914; padding: 2px;">
+                    <label style="color: #ccc;">Dinlenme (sn):</label>
+                    <input id="aj-rest-time" type="number" value="30" min="5" max="3600"
+                        style="width: 60px; margin-left: 5px; background: #2a1400; color: #FFD700; border: 1px solid #8B6914; padding: 2px;">
                 </div>
 
                 <div style="margin-bottom: 10px;">
@@ -229,11 +229,7 @@
         `;
 
         document.body.appendChild(panel);
-
-        // Sürükleme
         makeDraggable(panel, document.getElementById('aj-header'));
-
-        // Butonlar
         document.getElementById('aj-toggle').addEventListener('click', toggleAutoJob);
         document.getElementById('aj-close').addEventListener('click', () => {
             panel.style.display = 'none';
@@ -242,26 +238,20 @@
 
     function makeDraggable(el, handle) {
         let startX, startY, startLeft, startTop;
-
-        handle.addEventListener('mousedown', e => {
+        handle.addEventListener('mousedown', (e) => {
             startX = e.clientX;
             startY = e.clientY;
             startLeft = el.offsetLeft;
             startTop = el.offsetTop;
-
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
         });
-
         function onMove(e) {
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            el.style.left = startLeft + dx + 'px';
-            el.style.top = startTop + dy + 'px';
+            el.style.left = (startLeft + e.clientX - startX) + 'px';
+            el.style.top = (startTop + e.clientY - startY) + 'px';
             el.style.right = 'auto';
             el.style.bottom = 'auto';
         }
-
         function onUp() {
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
@@ -269,12 +259,16 @@
     }
 
     function toggleAutoJob() {
-        CONFIG.selectedJobId = parseInt(document.getElementById('aj-job-select').value) || null;
+        CONFIG.selectedJobs = [0,1,2,3].map(i => {
+            const val = parseInt(document.getElementById('aj-job-' + i).value);
+            return isNaN(val) ? null : val;
+        });
         CONFIG.minHealth = parseInt(document.getElementById('aj-min-health').value);
-        CONFIG.restTime = parseInt(document.getElementById('aj-rest-time').value) * 60000;
+        CONFIG.restTime = parseInt(document.getElementById('aj-rest-time').value);
         CONFIG.jobDuration = parseInt(document.getElementById('aj-duration').value);
         CONFIG.hotelSleepHours = parseInt(document.getElementById('aj-sleep-hours').value);
         CONFIG.enabled = !CONFIG.enabled;
+        currentJobIndex = 0;
 
         const btn = document.getElementById('aj-toggle');
         if (CONFIG.enabled) {
@@ -295,4 +289,5 @@
         const el = document.getElementById('aj-status');
         if (el) el.textContent = msg;
     }
+
 })();
