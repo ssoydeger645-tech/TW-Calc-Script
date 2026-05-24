@@ -1,100 +1,79 @@
 import { injectable, inject } from 'tsyringe';
-import { JobEfficiencyService } from './job-efficiency.service';
-import { ErrorTracker } from '../error-tracker/error-tracker';
-import { WestCalcWindowTab } from '../west-calc/west-calc-window.types';
 import { JobEfficiency } from './job-efficiency.types';
 
 @injectable()
-export class JobEfficiencyView {
-    key = WestCalcWindowTab.JobEfficiency;
-    title = 'İş Verimliliği';
-
+export class JobEfficiencyService {
     constructor(
-        @inject('window') private window: any,
-        private jobEfficiencyService: JobEfficiencyService,
-        private errorTracker: ErrorTracker
+        @inject('window') private window: any
     ) {}
 
-    init() {}
-
-    getMainDiv() {
-        const { west, $ } = this.window;
-        const container = $('<div style="padding: 10px;"></div>');
-
-        container.append(
-            $('<h3 style="margin-bottom: 10px; color: #8B4513; font-weight: bold; text-shadow: 1px 1px 0 #FFD700;">Çalışma Verimliliği Hesaplayıcı</h3>')
-        );
-
-        const durationLabel = $('<span style="margin-right: 8px; color: #4a2800; font-weight: bold;">Çalışma süresi: </span>');
-        const durationSelect = new west.gui.Combobox('TWCalc_JobEff_Duration')
-            .addItem(15, '15 saniye')
-            .addItem(600, '10 dakika')
-            .addItem(3600, '1 saat')
-            .setWidth(150);
-
-        const resultsDiv = $('<div id="TWCalc_JobEff_Results"></div>');
-
-        const calcBtn = new west.gui.Button()
-            .setCaption('Hesapla')
-            .click(() => {
-                this.errorTracker.execute(async () => {
-                    resultsDiv.html('<div style="text-align:center; padding: 20px; color: #4a2800; font-weight: bold;">Yükleniyor... (bu biraz sürebilir)</div>');
-                    const results = await this.jobEfficiencyService.getBestJobs(
-                        Number(durationSelect.getValue())
-                    );
-                    this.showResults(results, resultsDiv);
-                });
+    getJobData(jobId: number, x: number, y: number): Promise<any> {
+        return new Promise((resolve) => {
+            this.window.Ajax.remoteCallMode('job', 'job', { jobId, x, y }, (data: any) => {
+                resolve(data);
             });
-
-        const controlsDiv = $('<div style="margin-bottom: 15px; display: flex; align-items: center;"></div>');
-        controlsDiv.append(durationLabel);
-        controlsDiv.append(durationSelect.getMainDiv());
-        controlsDiv.append($('<span style="margin: 0 8px;"></span>'));
-        controlsDiv.append(calcBtn.getMainDiv());
-
-        container.append(controlsDiv);
-        container.append(resultsDiv);
-
-        return container;
+        });
     }
 
-    showResults(results: JobEfficiency[], resultsDiv: any) {
-        const { $ } = this.window;
+    calculateFromData(job: any, data: any, duration: number): JobEfficiency {
+        let durationIndex = 0;
+        if (duration >= 3600) durationIndex = 2;
+        else if (duration >= 600) durationIndex = 1;
 
-        const scrollpane = new this.window.west.gui.Scrollpane();
+        const dur = data.durations[durationIndex];
+        const actualDuration = dur.duration;
+        const xp = dur.xp;
+        const money = dur.money;
+        const energy = dur.cost;
 
-        const table = $(`
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                <thead>
-                    <tr style="background: rgba(100,50,0,0.6); font-weight: bold; color: #FFD700;">
-                        <td style="padding: 6px;">#</td>
-                        <td style="padding: 6px;">Çalışma Adı</td>
-                        <td style="padding: 6px;">XP/Saat</td>
-                        <td style="padding: 6px;">Para/Saat</td>
-                        <td style="padding: 6px;">Enerji/Saat</td>
-                        <td style="padding: 6px;">Verim Skoru</td>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        `);
+        const xpPerHour = Math.round(xp * (3600 / actualDuration));
+        const moneyPerHour = Math.round(money * (3600 / actualDuration));
+        const energyPerHour = Math.round(energy * (3600 / actualDuration));
+        const efficiencyScore = energyPerHour > 0
+            ? Math.round(xpPerHour / energyPerHour)
+            : 0;
 
-        results.forEach((r, index) => {
-            const bg = index % 2 === 0 ? 'rgba(100,50,0,0.3)' : 'rgba(100,50,0,0.1)';
-            const row = $(`
-                <tr style="border-bottom: 1px solid rgba(100,50,0,0.3); background: ${bg};">
-                    <td style="padding: 6px; color: #4a2800; font-weight: bold;">${index + 1}</td>
-                    <td style="padding: 6px; color: #4a2800; font-weight: bold;">${r.jobName}</td>
-                    <td style="padding: 6px; color: #006400; font-weight: bold;">${r.xpPerHour}</td>
-                    <td style="padding: 6px; color: #8B6914; font-weight: bold;">$${r.moneyPerHour}</td>
-                    <td style="padding: 6px; color: #8B0000; font-weight: bold;">${r.energyPerHour}</td>
-                    <td style="padding: 6px; color: #00008B; font-weight: bold;">${r.efficiencyScore}</td>
-                </tr>
-            `);
-            $('tbody', table).append(row);
+        return {
+            jobId: job.id,
+            jobName: job.name,
+            xpPerHour,
+            moneyPerHour,
+            energyPerHour,
+            efficiencyScore
+        };
+    }
+
+    async getBestJobs(duration: number): Promise<JobEfficiency[]> {
+        const { JobList, Character } = this.window;
+        const pos = Character.position;
+        const jobs = JobList.getSortedJobs('id');
+        const results: JobEfficiency[] = [];
+
+        const minimap = await new Promise<any>((resolve) => {
+            this.window.Ajax.get('map', 'get_minimap', {}, (data: any) => {
+                resolve(data);
+            });
         });
 
-        scrollpane.appendContent(table);
-        resultsDiv.empty().append($(scrollpane.getMainDiv()).css({ height: '280px' }));
+        for (const job of jobs) {
+            if (job.level > Character.level) continue;
+
+            const group = minimap.job_groups[job.groupid];
+            if (!group || !group.length) continue;
+
+            const nearest = group.sort((a: number[], b: number[]) =>
+                Math.abs(a[0] - pos.x) + Math.abs(a[1] - pos.y) -
+                (Math.abs(b[0] - pos.x) + Math.abs(b[1] - pos.y))
+            )[0];
+
+            const data = await this.getJobData(job.id, nearest[0], nearest[1]);
+            if (data.error || !data.durations) continue;
+
+            results.push(this.calculateFromData(job, data, duration));
+        }
+
+        return results
+            .sort((a, b) => b.efficiencyScore - a.efficiencyScore)
+            .slice(0, 15);
     }
 }
