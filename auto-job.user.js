@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TW Auto Job
-// @version      1.4.0
-// @description  Otomatik iş yapma - 2 çalışma, tekrar sayısı
+// @version      1.5.0
+// @description  Otomatik iş yapma - 2 çalışma, tekrar sayısı, bitince durur
 // @author       ssoydeger645-tech
 // @include      https://*.the-west.*/game.php*
 // @include      https://*.the-west.com.*/game.php*
@@ -86,30 +86,78 @@
         }, 2000);
     }
 
+    // ------------------------------------------------------------------
+    // FIX 1: Sıradaki işi döngüye sokmadan döndür.
+    // currentJobIndex CONFIG.jobs.length'e ulaşırsa null döner → durur.
+    // ------------------------------------------------------------------
     function getNextJob() {
         const activeJobs = CONFIG.jobs.filter(j => j.id !== null);
         if (!activeJobs.length) return null;
 
-        const job = CONFIG.jobs[currentJobIndex];
-        if (!job || job.id === null) {
-            currentJobIndex = 0;
-            currentJobDoneCount = 0;
-            return getNextJob();
+        // Null slotları atla (ileriye doğru, geri dönme)
+        while (currentJobIndex < CONFIG.jobs.length && CONFIG.jobs[currentJobIndex].id === null) {
+            currentJobIndex++;
         }
 
+        // Tüm slotlar bitti → dur
+        if (currentJobIndex >= CONFIG.jobs.length) return null;
+
+        return CONFIG.jobs[currentJobIndex];
+    }
+
+    // ------------------------------------------------------------------
+    // FIX 1: İş tamamlandığında sayacı güncelle, gerekirse sonraki slota geç.
+    // Tüm işler bittiyse false döner → otomasyon durdurulur.
+    // ------------------------------------------------------------------
+    function onJobComplete() {
         currentJobDoneCount++;
+        const job = CONFIG.jobs[currentJobIndex];
+
         if (currentJobDoneCount >= job.count) {
+            // Bu slot bitti, bir sonrakine geç
             currentJobDoneCount = 0;
-            currentJobIndex = (currentJobIndex + 1) % CONFIG.jobs.length;
-            // Boş slotları atla
-            let tries = 0;
-            while (CONFIG.jobs[currentJobIndex].id === null && tries < CONFIG.jobs.length) {
-                currentJobIndex = (currentJobIndex + 1) % CONFIG.jobs.length;
-                tries++;
+            currentJobIndex++;
+
+            // Null slotları atla
+            while (currentJobIndex < CONFIG.jobs.length && CONFIG.jobs[currentJobIndex].id === null) {
+                currentJobIndex++;
             }
         }
 
-        return job;
+        // Tüm slotlar tükendiyse tamamlandı
+        if (currentJobIndex >= CONFIG.jobs.length) {
+            CONFIG.enabled = false;
+            isWorking = false;
+            const btn = document.getElementById('aj-toggle');
+            if (btn) {
+                btn.textContent = '▶ Başlat';
+                btn.style.background = '#2a6000';
+                btn.style.borderColor = '#4a8000';
+            }
+            updateStatus('✅ Tüm çalışmalar tamamlandı!');
+            return false; // Devam etme
+        }
+
+        return true; // Devam et
+    }
+
+    // ------------------------------------------------------------------
+    // FIX 2: Sabit setTimeout yerine TaskQueue boşalana kadar bekle.
+    // Bu sayede yolculuk süresi iş sayacını etkilemez.
+    // ------------------------------------------------------------------
+    function waitForIdle(callback) {
+        const check = setInterval(() => {
+            try {
+                const queue = window.TaskQueue.queue;
+                if (!queue || queue.length === 0) {
+                    clearInterval(check);
+                    callback();
+                }
+            } catch (e) {
+                clearInterval(check);
+                callback();
+            }
+        }, 3000); // Her 3 saniyede bir kontrol et
     }
 
     function startJob() {
@@ -122,7 +170,10 @@
 
         const jobConfig = getNextJob();
         if (!jobConfig || !jobConfig.id) {
-            updateStatus('Lütfen en az bir çalışma seçin!');
+            if (CONFIG.enabled) {
+                // getNextJob null döndü ama enabled hâlâ true → hiç iş seçilmemiş
+                updateStatus('Lütfen en az bir çalışma seçin!');
+            }
             return;
         }
 
@@ -143,18 +194,29 @@
             )[0];
 
             isWorking = true;
-            updateStatus('Çalışılıyor: ' + job.name + ' (' + currentJobDoneCount + '/' + jobConfig.count + ')');
+
+            // Toplam kalan tekrarı göster
+            const remaining = jobConfig.count - currentJobDoneCount;
+            updateStatus(`Çalışılıyor: ${job.name} (${currentJobDoneCount + 1}/${jobConfig.count})`);
 
             const task = new window.TaskJob(job.id, nearest[0], nearest[1], CONFIG.jobDuration);
             window.TaskQueue.add(task);
 
-            setTimeout(() => {
+            // FIX 2: Kuyruk boşalana kadar bekle (yolculuk + iş süresi)
+            waitForIdle(() => {
                 isWorking = false;
+
+                // FIX 1: Sayacı güncelle, tüm işler bitti mi kontrol et
+                const shouldContinue = onJobComplete();
+                if (!shouldContinue) return;
+
+                if (!CONFIG.enabled) return;
+
                 updateStatus('Dinleniyor... (' + CONFIG.restTime + ' sn)');
                 setTimeout(() => {
                     if (CONFIG.enabled) startJob();
                 }, CONFIG.restTime * 1000);
-            }, (CONFIG.jobDuration + 10) * 1000);
+            });
         });
     }
 
@@ -316,6 +378,8 @@
         CONFIG.jobDuration = parseInt(document.getElementById('aj-duration').value);
         CONFIG.hotelSleepHours = parseInt(document.getElementById('aj-sleep-hours').value);
         CONFIG.enabled = !CONFIG.enabled;
+
+        // Her başlatmada sayaçları sıfırla
         currentJobIndex = 0;
         currentJobDoneCount = 0;
 
